@@ -109,8 +109,14 @@ lab:
 
 ## 9. Network surface
 
-- `ufw`: only 22/tcp and 80/tcp inbound. No 3306, no direct FPM socket exposure
-  (it is a unix socket). **[verify]**
+- `ufw`: only 22/tcp, 80/tcp and 443/tcp inbound. No 3306, no direct FPM socket
+  exposure (it is a unix socket). **[verify]**
+- Public domain is served over TLS (Let's Encrypt, `siwang.duckdns.org`); plain
+  HTTP to the domain and any direct-IP visit 301-redirect to the HTTPS domain.
+  The internal `*.siwang.pineapple` vhosts stay on HTTP by design (no valid cert
+  is possible for names absent from public DNS). The IP redirect keys on the
+  Host *header*, so `ffuf -H "Host: FUZZ.siwang.pineapple"` is unaffected and
+  the Stage 1 fallback still works.
 
 ---
 

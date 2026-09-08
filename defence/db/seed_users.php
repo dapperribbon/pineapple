@@ -31,12 +31,12 @@ if ($dbUser === null || $dbPass === null) {
 /*
  * The seeded cast.
  *
- * - mchoo  : the "owner" of the staging portal. Admin. Students never need
+ * - mika   : the "owner" of the staging portal. Admin. Students never need
  *            these credentials -- Stage 2 forges an admin *session* rather
  *            than authenticating as anyone -- but the account has to exist so
  *            the admin UI has something to render and the seeded documents
  *            have an owner.
- * - jtan   : an ordinary colleague. Exists to make the user list look real.
+ * - emma   : an ordinary colleague. Exists to make the user list look real.
  * - svc_dms: a dormant service account, disabled-looking. Pure set dressing.
  *
  * Passwords are long and random-looking on purpose. They are NOT part of any
@@ -46,15 +46,15 @@ if ($dbUser === null || $dbPass === null) {
  */
 $users = [
     [
-        'username' => 'mchoo',
-        'email'    => 'm.choo@siwang-trading.example',
+        'username' => 'mika',
+        'email'    => 'mika@siwang-trading.example',
         'password' => 'Tq7#vLm2_BerthQ4!raa',
         'role'     => 'admin',
         'created'  => '2024-09-15 08:30:00',
     ],
     [
-        'username' => 'jtan',
-        'email'    => 'j.tan@siwang-trading.example',
+        'username' => 'emma',
+        'email'    => 'emma@siwang-trading.example',
         'password' => 'k4Nw!8sPz_Tuas#0912x',
         'role'     => 'user',
         'created'  => '2024-09-15 08:41:00',

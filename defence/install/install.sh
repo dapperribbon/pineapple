@@ -27,6 +27,10 @@ WWW_MAIN="/var/www/main"
 WWW_DEV="/var/www/dev"
 WWW_BACKUP="/var/www/backup"
 
+# TLS certificate for the public domain. Override if your certbot layout
+# differs, e.g.:  sudo CERT_DIR=/etc/letsencrypt/live/siwang.duckdns.org-0001 ./install.sh
+CERT_DIR="${CERT_DIR:-/etc/letsencrypt/live/siwang.duckdns.org}"
+
 if [[ $EUID -ne 0 ]]; then
     echo "error: run with sudo." >&2
     exit 1
@@ -54,7 +58,7 @@ apt-get install -y -qq \
 # 2. Apache modules and vhosts
 # ---------------------------------------------------------------------------
 echo "==> Configuring Apache"
-a2enmod proxy proxy_fcgi setenvif headers rewrite >/dev/null 2>&1 || true
+a2enmod proxy proxy_fcgi setenvif headers rewrite ssl >/dev/null 2>&1 || true
 a2dismod --quiet php"${PHP_VER}" mpm_prefork >/dev/null 2>&1 || true
 a2enmod --quiet mpm_event >/dev/null 2>&1 || true
 
@@ -67,6 +71,27 @@ cp "${REPO}/apache/hardening.conf"         /etc/apache2/conf-available/siwang-ha
 a2dissite --quiet 000-default default-ssl >/dev/null 2>&1 || true
 a2ensite  --quiet 000-siwang-main 010-siwang-dev 020-siwang-backup >/dev/null
 a2enconf  --quiet siwang-hardening >/dev/null
+
+# TLS: point the :443 vhost at wherever the certificate actually lives. The
+# committed config uses the default certbot path; substitute if CERT_DIR was
+# overridden so we don't have to keep the two in sync by hand.
+MAIN_CONF="/etc/apache2/sites-available/000-siwang-main.conf"
+if [[ "${CERT_DIR}" != "/etc/letsencrypt/live/siwang.duckdns.org" ]]; then
+    sed -i "s#/etc/letsencrypt/live/siwang.duckdns.org#${CERT_DIR}#g" "${MAIN_CONF}"
+fi
+
+if [[ -f "${CERT_DIR}/fullchain.pem" && -f "${CERT_DIR}/privkey.pem" ]]; then
+    echo "    TLS certificate found at ${CERT_DIR} -- HTTPS enabled"
+else
+    echo "    WARNING: no certificate at ${CERT_DIR}." >&2
+    echo "             The :443 vhost will fail to start and Apache may refuse to"          >&2
+    echo "             reload. Either place the Let's Encrypt cert there, re-run with"      >&2
+    echo "             CERT_DIR=... , or obtain one first, e.g.:"                            >&2
+    echo "                 sudo apt-get install -y certbot python3-certbot-apache"           >&2
+    echo "                 sudo certbot --apache -d siwang.duckdns.org"                       >&2
+    echo "             To build HTTP-only for now, comment out the <VirtualHost *:443>"     >&2
+    echo "             block in ${MAIN_CONF} and re-run." >&2
+fi
 
 # ---------------------------------------------------------------------------
 # 3. PHP-FPM pool

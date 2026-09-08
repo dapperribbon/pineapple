@@ -53,7 +53,7 @@ if [[ ${RESET} -eq 1 ]]; then
         # Re-seed the sample documents and diag history.
         mysql < "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/db/seed.sql" 2>/dev/null || true
         # Remove any student-registered accounts, keep the three seeded ones.
-        mysql -e "DELETE FROM siwang_dev.users WHERE username NOT IN ('mchoo','jtan','svc_dms');" 2>/dev/null || true
+        mysql -e "DELETE FROM siwang_dev.users WHERE username NOT IN ('mika','emma','svc_dms');" 2>/dev/null || true
     fi
 fi
 
@@ -99,16 +99,17 @@ touch /var/log/php-siwang-dev.log
 chown www-data:adm /var/log/php-siwang-dev.log
 chmod 0640 /var/log/php-siwang-dev.log
 
-echo "==> Firewall: only 22 and 80 should face the student network"
+echo "==> Firewall: only 22, 80 and 443 should face the student network"
 if command -v ufw >/dev/null 2>&1; then
     ufw --force reset >/dev/null 2>&1 || true
     ufw default deny incoming >/dev/null
     ufw default allow outgoing >/dev/null
     ufw allow 22/tcp >/dev/null
     ufw allow 80/tcp >/dev/null
+    ufw allow 443/tcp >/dev/null
     # MariaDB stays on loopback; do not open 3306.
     ufw --force enable >/dev/null
-    echo "    ufw: 22/tcp, 80/tcp allowed; MariaDB bound to loopback"
+    echo "    ufw: 22/tcp, 80/tcp, 443/tcp allowed; MariaDB bound to loopback"
 else
     echo "    ufw not present -- ensure 3306 is not exposed by other means"
 fi
