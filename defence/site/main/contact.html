@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Contact — Siwang Trading Co.</title>
+<meta name="description" content="Contact Siwang Trading Co. — Keppel Distripark, Singapore. Operations desk, customs desk and after-hours contacts.">
+<link rel="stylesheet" href="/assets/css/site.css">
+</head>
+<body>
+
+<header class="site-head">
+  <div class="wrap head-inner">
+    <a class="brand" href="/">
+      <span class="brand-mark">SW</span>
+      <span class="brand-text">Siwang Trading Co.</span>
+    </a>
+    <nav class="site-nav">
+      <a href="/">Home</a>
+      <a href="/services.html">Services</a>
+      <a href="/about.html">About</a>
+      <a href="/contact.html">Contact</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <h1 class="page-title">Contact</h1>
+  <p class="page-sub">Someone is on the customs desk at all hours. Genuinely.</p>
+
+  <div class="prose">
+
+    <h2>Offices</h2>
+    <table class="plain">
+      <thead>
+        <tr><th>Desk</th><th>Hours (SGT)</th><th>Contact</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Operations</td><td>Mon&ndash;Fri 08:30&ndash;18:00</td>
+          <td>ops@siwang-trading.example</td>
+        </tr>
+        <tr>
+          <td>Customs desk</td><td>24/7</td>
+          <td>customs@siwang-trading.example</td>
+        </tr>
+        <tr>
+          <td>Accounts</td><td>Mon&ndash;Fri 09:00&ndash;17:00</td>
+          <td>accounts@siwang-trading.example</td>
+        </tr>
+        <tr>
+          <td>IT helpdesk</td><td>Mon&ndash;Fri 09:00&ndash;17:30</td>
+          <td>helpdesk@siwang-trading.example</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>Registered address</h2>
+    <p>
+      Siwang Trading Co. (Pte) Ltd<br>
+      18 Keppel Distripark, #04-11<br>
+      Singapore 099455<br>
+      UEN 199401882K
+    </p>
+
+    <h2>Request a quote</h2>
+    <p>
+      Tell us what is moving, from where, to where, and by when. We will come
+      back within one working day with a rate and a realistic transit time.
+    </p>
+
+    <form id="enquiry-form" class="form-grid"
+          action="mailto:ops@siwang-trading.example" method="post"
+          enctype="text/plain">
+      <div>
+        <label for="q-name">Name</label>
+        <input id="q-name" name="name" type="text" autocomplete="name" required>
+      </div>
+      <div>
+        <label for="q-email">Email</label>
+        <input id="q-email" name="email" type="email" autocomplete="email" required>
+      </div>
+      <div>
+        <label for="q-mode">Mode</label>
+        <select id="q-mode" name="mode">
+          <option>Ocean — FCL</option>
+          <option>Ocean — LCL</option>
+          <option>Air</option>
+          <option>Customs brokerage only</option>
+          <option>Warehousing</option>
+          <option>Not sure</option>
+        </select>
+      </div>
+      <div>
+        <label for="q-detail">Details</label>
+        <textarea id="q-detail" name="detail" rows="5"
+                  placeholder="Origin, destination, commodity, weight/volume, target date"></textarea>
+      </div>
+      <p id="enquiry-note" class="note"></p>
+      <div>
+        <button class="btn" type="submit">Send enquiry</button>
+      </div>
+    </form>
+
+    <p class="muted small">
+      This form opens your own mail client. We do not store enquiries on this
+      website.
+    </p>
+
+  </div>
+
+</main>
+
+<footer class="site-foot">
+  <div class="wrap foot-inner">
+
+    <div class="foot-col">
+      <h3>Siwang Trading Co. (Pte) Ltd</h3>
+      <p class="muted">
+        18 Keppel Distripark, #04-11<br>
+        Singapore 099455<br>
+        UEN 199401882K
+      </p>
+    </div>
+
+    <div class="foot-col">
+      <h3>Company</h3>
+      <ul>
+        <li><a href="/services.html">Services</a></li>
+        <li><a href="/about.html">About us</a></li>
+        <li><a href="/contact.html">Contact</a></li>
+      </ul>
+    </div>
+
+    <div class="foot-col">
+      <h3>Internal</h3>
+      <ul>
+        <li><a href="http://dev.siwang.pineapple/">Staging portal</a></li>
+        <li><a href="/contact.html">IT helpdesk</a></li>
+      </ul>
+      <p class="muted small">Staff access only.</p>
+    </div>
+
+  </div>
+  <div class="wrap foot-legal">
+    <p class="muted small">
+      &copy; Siwang Trading Co. (Pte) Ltd. Licensed declaring agent,
+      Singapore Customs. All freight handled subject to the Singapore Logistics
+      Association Standard Trading Conditions.
+    </p>
+  </div>
+</footer>
+
+<script src="/assets/js/site.js"></script>
+</body>
+</html>

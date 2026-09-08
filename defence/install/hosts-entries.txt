@@ -1,0 +1,18 @@
+# Siwang lab -- client hosts entries
+#
+# Students add these to their attacking machine so the internal vhosts resolve.
+# These names are deliberately absent from public DNS; only siwang.duckdns.org
+# resolves for real.
+#
+#   Linux / macOS:  /etc/hosts
+#   Windows:        C:\Windows\System32\drivers\etc\hosts   (edit as Administrator)
+#
+# Replace <BOX_IP> with the lab box's address. If you are solving over the
+# DuckDNS name, you can point all three at that instead.
+
+<BOX_IP>   siwang.duckdns.org
+<BOX_IP>   dev.siwang.pineapple
+<BOX_IP>   backup.siwang.pineapple
+
+# One-liner to append them (Linux/macOS), edit the IP first:
+#   echo "<BOX_IP> siwang.duckdns.org dev.siwang.pineapple backup.siwang.pineapple" | sudo tee -a /etc/hosts

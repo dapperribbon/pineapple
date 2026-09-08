@@ -1,0 +1,8 @@
+Document upload target for the staging DMS.
+
+This directory is web-reachable and PHP-executable by design -- it is the
+Stage 3 payload landing zone. install/install.sh creates it owned by www-data
+with mode 0755, and install/lockdown.sh empties it between classes.
+
+Keep this file so the directory survives a git clone. It is denied over HTTP
+by the dotfile rule in the vhost.

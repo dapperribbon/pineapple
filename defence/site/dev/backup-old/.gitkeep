@@ -1,0 +1,10 @@
+Rabbit hole #4.
+
+The pre-launch checklist comment in the page footer (MWS-407, "purge
+/backup-old/ from the docroot") points students here. The directory exists so
+that the 403 is honest rather than a 404, and it is empty so there is nothing
+behind it. Apache denies it outright -- see the <Directory> block in
+apache/010-siwang-dev.conf.
+
+Do not put anything in here. If it ever holds a real file it stops being a
+dead end and becomes an unintended path.
