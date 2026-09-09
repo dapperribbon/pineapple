@@ -4,12 +4,15 @@
  *
  * Read-only. Lists registered documents and staging accounts.
  *
- * The document table shows, under each file, its real path under /uploads --
- * that is how a student learns where their uploaded file lives (directory
- * indexing is off, so without it they would be guessing). It is a deliberate
- * breadcrumb. The "Stored as" link itself points at view.php, which streams the
- * bytes with a correct image Content-Type so legitimate images actually render;
- * the raw /uploads/<name> path shown beneath it is the one that executes.
+ * Each document is shown with a thumbnail: <img src="/uploads/<stored_name>">.
+ * That <img> is the deliberate (subtle) breadcrumb -- the stored name is
+ * random and the path is NOT printed as a label or link, but it is present in
+ * the page source and the browser's Network tab, so a student reading the page
+ * source finds the exact /uploads/<name> URL. Directory indexing is off.
+ *
+ * Because the uploads directory executes image extensions (the Stage 3
+ * misconfiguration), the thumbnail renders broken rather than displaying -- the
+ * browser's GET runs the file through PHP-FPM. That is expected and accepted.
  *
  * `mime_reported` and `mime_detected` are shown side by side. After a Stage 3
  * bypass the row looks like an ordinary image upload -- both columns say
@@ -81,11 +84,10 @@ page_header('Administration', 'admin');
               <td class="mono nowrap">DOC-<?= e(str_pad((string) $doc['id'], 5, '0', STR_PAD_LEFT)) ?></td>
               <td class="strong"><?= e($doc['title']) ?></td>
               <td class="mono">
-                <a href="/view.php?f=<?= e(rawurlencode((string) $doc['stored_name'])) ?>">
-                  <?= e($doc['stored_name']) ?>
-                </a>
-                <div class="muted small">
-                  <?= e(UPLOAD_URL . '/' . $doc['stored_name']) ?>
+                <?= e($doc['stored_name']) ?>
+                <div class="doc-thumb">
+                  <img src="<?= e(UPLOAD_URL . '/' . rawurlencode((string) $doc['stored_name'])) ?>"
+                       alt="<?= e($doc['title']) ?>" loading="lazy" width="48" height="48">
                 </div>
               </td>
               <td class="mono"><?= e($doc['mime_reported']) ?></td>

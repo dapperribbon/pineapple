@@ -191,10 +191,10 @@ page_header('Document upload', 'upload');
 
     <?php if ($stored !== null): ?>
       <div class="msg msg-good">
-        Registered <strong><?= e($stored) ?></strong>.
-        <a href="/view.php?f=<?= e(rawurlencode($stored)) ?>">View stored document</a>
-        <div class="mono small" style="margin-top:0.4rem;">
-          <?= e(UPLOAD_URL . '/' . $stored) ?>
+        Registered <strong><?= e($stored) ?></strong>. A preview appears below.
+        <div class="doc-thumb" style="margin-top:0.5rem;">
+          <img src="<?= e(UPLOAD_URL . '/' . rawurlencode($stored)) ?>"
+               alt="uploaded document preview" width="96" height="96">
         </div>
       </div>
     <?php endif; ?>

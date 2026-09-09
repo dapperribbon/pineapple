@@ -58,13 +58,6 @@ ucode=$(hcode "$DEV" /upload.php)
     && ok "upload.php gated for anonymous (HTTP $ucode)" \
     || bad "upload.php returned $ucode for anonymous user"
 
-# view.php streams stored files with a correct image Content-Type so legit
-# images render; it must be admin-gated so it is not an anonymous file-read.
-vcode=$(hcode "$DEV" "/view.php?f=00112233aabbccdd.gif")
-[[ "$vcode" == "302" || "$vcode" == "403" ]] \
-    && ok "view.php gated for anonymous (HTTP $vcode)" \
-    || bad "view.php returned $vcode for anonymous user"
-
 # tools.php reachability check requires a session, so just assert the file is
 # not served as source (would mean FPM is not wired).
 hget "$DEV" /tools.php | grep -q '<?php' \

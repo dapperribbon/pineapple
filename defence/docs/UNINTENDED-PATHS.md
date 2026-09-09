@@ -148,14 +148,13 @@ them:
 - No CSRF token on `upload.php` / `tools.php` (keeps them scriptable; in-world,
   added-late screens that missed the review).
 
-**Image viewing (`view.php`).** Because `uploads/` runs image extensions through
-PHP, fetching a clean image at its raw `/uploads/<name>` URL returns it as
-text/html garbage. So the admin "View" link points at `view.php`, which
-`readfile()`s the bytes and streams them with the correct `image/*`
-Content-Type — legitimate images render normally. `view.php` is **not** an
-alternate exploit path: it is `require_admin()`-gated (**[verify]**), it
-`basename()`s and regex-validates the name against the exact stored-name shape
-and confirms the path resolves inside `UPLOAD_DIR` (no traversal), and
-`readfile()` streams bytes without interpreting them. The raw
-`/uploads/<name>.<ext>` URL still executes — that remains the Stage 3 vector,
-and the admin listing prints that raw path beneath each entry as the breadcrumb.
+**Image rendering / the breadcrumb.** Because `uploads/` runs image extensions
+through PHP, every image there — including the `<img>` thumbnails on the admin
+and upload pages — is executed by FPM and comes back as `text/html`, so it
+renders broken instead of displaying. This is intentional: the path is never
+printed as a label or link, only as the `src` of those thumbnails, so it is
+exposed in the page source / Network tab (a deliberately subtle breadcrumb) but
+not handed to the student directly. There is no image-viewer/streamer endpoint
+(an earlier `view.php` was removed) — nothing reads a client-named file back out
+of `uploads/`, so there is no anonymous or traversal file-read surface. Fetching
+`/uploads/<name>.<ext>` directly is the Stage 3 execution vector, as intended.

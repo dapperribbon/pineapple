@@ -183,6 +183,18 @@ button.btn:hover, .btn:hover { background: #0b5c8c; }
 
 .form-foot { margin-top: 1.3rem; padding-top: 1.1rem; border-top: 1px solid var(--rule); font-size: 0.9rem; color: var(--ink-faint); }
 
+/* --- document thumbnails -------------------------------------------------- */
+/* Uploaded documents are shown as image thumbnails. The uploads dir executes
+   image extensions, so these render broken -- expected. Keep them boxed so the
+   broken-image glyph does not disturb the table layout. */
+.doc-thumb { margin-top: 0.35rem; }
+.doc-thumb img {
+  width: 48px; height: 48px;
+  object-fit: cover;
+  border: 1px solid var(--rule);
+  background: var(--wash);
+}
+
 /* --- messages ------------------------------------------------------------- */
 
 .msg { padding: 0.75rem 0.95rem; border-radius: 2px; margin-bottom: 1.2rem; font-size: 0.92rem; border: 1px solid transparent; }

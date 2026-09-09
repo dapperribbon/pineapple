@@ -102,7 +102,9 @@ Final payload — a genuine GIF with the tag appended after the image data:
 uploaded as `shell.gif`. The stored file keeps its image extension, and the
 vhost maps image extensions to PHP-FPM **inside `/uploads/` only**, so fetching
 `/uploads/<name>.gif?c=id` executes it as `www-data`. (The stored name is
-server-randomised; students get the URL from the `/admin.php` listing link.)
+server-randomised and never printed as a link; students recover the URL from the
+`src` of the broken `<img>` thumbnail on the upload confirmation / `/admin.php`
+— i.e. from view-source or the Network tab.)
 
 **Teaching points:**
 
@@ -167,6 +169,6 @@ backup job) so the follow-up build starts from a known place.
 | Upload always rejected | only beat one of the five checks | "Read the exact error. Which check is talking?" |
 | "not a valid image" | uploaded a bare `<?= … ?>` file, no image data | "It has to decode as a real image — start from one." |
 | "contains server code" | used `<?php` | "What other PHP open tag is there?" (→ `<?=`) |
-| Uploads OK but never executes | fetching a legit image, or named `.php`-ish | "The admin list links the real stored URL. Payload must be in a real image, named `.gif`." |
+| Uploads OK but never executes | fetching a legit image, or named `.php`-ish | "The stored URL is in the page source (the thumbnail's img src). Payload must be in a real image, named `.gif`." |
 | Ping tool eating all their time | working as intended | let them; it's the lesson. Show them `diag_queue` afterwards. |
 | Ping tool eating all their time | working as intended | let them; it's the lesson. Show them `diag_queue` afterwards. |

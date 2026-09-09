@@ -44,7 +44,7 @@ retry to remove doubt. See the note in `includes/auth.php`.
 | 10 | Rejection: "not a valid image" | fires on a bare-tag file | reveals a real decode (GD) check → must start from a genuine image |
 | 11 | Rejection: "appears to contain server code" | fires on `<?php` | a *string* scan → what other PHP tag is there? (`<?=`) |
 | 12 | Rejection: "filename is not permitted" | fires on any `.php` in the name | can't sneak an executable extension into the name |
-| 13 | `/admin.php` document list | prints the raw `/uploads/<random>.<ext>` path under each file (the "View" link itself goes via `view.php`) | how they learn the exact (randomised) executable URL — indexing is off |
+| 13 | Upload success page **and** `/admin.php` list | render the file as a thumbnail `<img src="/uploads/<random>.<ext>">` — the path is **not** a label or link, it lives only in the page source / Network tab (the thumbnail renders broken, since the dir executes images) | reading view-source (or the Network tab) yields the exact randomised `/uploads/<name>` URL — a deliberately subtle breadcrumb; indexing is off |
 
 ---
 
