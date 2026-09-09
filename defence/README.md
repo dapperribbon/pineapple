@@ -25,7 +25,7 @@ included here — see [`docs/PRIVESC-TODO.md`](docs/PRIVESC-TODO.md).
 |---|---|---|---|
 | 1 | vhost routing / hidden staging host | reads the brochure, finds `dev.siwang.pineapple`, adds a hosts entry (or fuzzes Host headers) | the staging login page |
 | 2 | `unserialize()` of an unsigned "remember me" cookie | registers, ticks "keep me signed in", flips `role` in the serialized cookie | an admin session |
-| 3 | upload filter: spoofable type + magic-byte sniff + one-entry extension blacklist | uploads `GIF89a`-prefixed PHP as `.phtml` with `Content-Type: image/gif` | RCE as `www-data` |
+| 3 | upload filter: extension allowlist + `.php`-name block + GD decode + `<?php` content scan | uploads a **real image** carrying a `<?=` payload as `.gif` (run as PHP in the uploads dir) | RCE as `www-data` |
 
 Everything else on the box is either genuinely secure or a deliberate dead end.
 See [`docs/UNINTENDED-PATHS.md`](docs/UNINTENDED-PATHS.md) for how every shortcut
@@ -43,7 +43,7 @@ defence/
     main/        static brochure   -> /var/www/main   (clean, byte-stable fallback)
     dev/         the vulnerable PHP app -> /var/www/dev
     backup/      stub vhost        -> /var/www/backup  (reserved privesc hook)
-  exploit/       forge_cookie.py, make_payload.py, payload.phtml, exploit.py, USAGE.md
+  exploit/       forge_cookie.py, make_payload.py, exploit.py, USAGE.md
   install/       install.sh, lockdown.sh, verify.sh, hosts-entries.txt
   docs/          STORY, BREADCRUMBS, WALKTHROUGH, UNINTENDED-PATHS, PRIVESC-TODO
 ```
@@ -101,11 +101,13 @@ here. The lesson is that `allowed_classes` stops gadgets but does **not** make
 deserializing untrusted input safe, because the object's *contents* are still
 attacker-controlled.
 
-**Stage 3 — upload (`site/dev/upload.php`).** Three checks, each individually
-bypassable: a client-supplied `Content-Type` (spoof it), a real `finfo` content
-sniff (defeated by a 6-byte `GIF89a` prefix, because libmagic reads only the
-signature), and a one-entry `.php` extension blacklist (use `.phtml`). The dev
-vhost maps `.php .phtml .php5 .php7 .phar` to FPM including under `/uploads`.
+**Stage 3 — upload (`site/dev/upload.php`).** Five checks: an image-extension
+allowlist, a size cap, a `.php`-substring filename block, a real GD image-decode,
+and a content scan for the literal `<?php`. All fall to one payload: a **genuine
+image** (passes GD) with a `<?= system($_GET['c']); ?>` tag appended (the scan
+only looks for `<?php`, and `<?=` is always enabled), stored as `.gif`. The dev
+vhost maps image extensions to FPM **inside `/uploads/` only**, and the FPM pool
+lists them in `security.limit_extensions`, so `/uploads/<name>.gif` executes.
 
 ---
 

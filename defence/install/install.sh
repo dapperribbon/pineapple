@@ -48,7 +48,7 @@ export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
 apt-get install -y -qq \
     apache2 \
-    "php${PHP_VER}-fpm" "php${PHP_VER}-mysql" "php${PHP_VER}-cli" \
+    "php${PHP_VER}-fpm" "php${PHP_VER}-mysql" "php${PHP_VER}-cli" "php${PHP_VER}-gd" \
     mariadb-server \
     libapache2-mod-fcgid \
     iputils-ping \

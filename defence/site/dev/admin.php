@@ -4,15 +4,18 @@
  *
  * Read-only. Lists registered documents and staging accounts.
  *
- * The document table links each stored file at its real URL under /uploads.
- * That link is how a student learns where their uploaded file lives --
- * directory indexing is off on this vhost, so without it they would be
- * guessing at the path. It is a deliberate breadcrumb, not an oversight.
+ * The document table shows, under each file, its real path under /uploads --
+ * that is how a student learns where their uploaded file lives (directory
+ * indexing is off, so without it they would be guessing). It is a deliberate
+ * breadcrumb. The "Stored as" link itself points at view.php, which streams the
+ * bytes with a correct image Content-Type so legitimate images actually render;
+ * the raw /uploads/<name> path shown beneath it is the one that executes.
  *
- * `mime_reported` and `mime_detected` are shown side by side. On a normal
- * upload they agree. After a successful Stage 3 bypass the row shows
- * image/gif for both while the filename ends in .phtml -- which is exactly
- * the detection story for the blue-team half of the debrief.
+ * `mime_reported` and `mime_detected` are shown side by side. After a Stage 3
+ * bypass the row looks like an ordinary image upload -- both columns say
+ * image/gif and the stored name ends in .gif -- yet the file executes. That
+ * "an upload dir is running code that looks like a plain image" is exactly the
+ * detection story for the blue-team half of the debrief.
  */
 
 declare(strict_types=1);
@@ -78,9 +81,12 @@ page_header('Administration', 'admin');
               <td class="mono nowrap">DOC-<?= e(str_pad((string) $doc['id'], 5, '0', STR_PAD_LEFT)) ?></td>
               <td class="strong"><?= e($doc['title']) ?></td>
               <td class="mono">
-                <a href="<?= e(UPLOAD_URL . '/' . rawurlencode((string) $doc['stored_name'])) ?>">
+                <a href="/view.php?f=<?= e(rawurlencode((string) $doc['stored_name'])) ?>">
                   <?= e($doc['stored_name']) ?>
                 </a>
+                <div class="muted small">
+                  <?= e(UPLOAD_URL . '/' . $doc['stored_name']) ?>
+                </div>
               </td>
               <td class="mono"><?= e($doc['mime_reported']) ?></td>
               <td class="mono"><?= e($doc['mime_detected']) ?></td>

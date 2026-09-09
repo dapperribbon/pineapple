@@ -58,6 +58,13 @@ ucode=$(hcode "$DEV" /upload.php)
     && ok "upload.php gated for anonymous (HTTP $ucode)" \
     || bad "upload.php returned $ucode for anonymous user"
 
+# view.php streams stored files with a correct image Content-Type so legit
+# images render; it must be admin-gated so it is not an anonymous file-read.
+vcode=$(hcode "$DEV" "/view.php?f=00112233aabbccdd.gif")
+[[ "$vcode" == "302" || "$vcode" == "403" ]] \
+    && ok "view.php gated for anonymous (HTTP $vcode)" \
+    || bad "view.php returned $vcode for anonymous user"
+
 # tools.php reachability check requires a session, so just assert the file is
 # not served as source (would mean FPM is not wired).
 hget "$DEV" /tools.php | grep -q '<?php' \
@@ -71,21 +78,46 @@ if command -v getcap >/dev/null 2>&1; then
         || bad "ping lacks cap_net_raw -- diagnostics rabbit hole will look broken"
 fi
 
-echo "== Stage 3: upload filter behaviour =="
+echo "== Stage 3: image execution and scope =="
 
-# The uploads dir must map to FPM. Drop a probe as www-data would, then fetch it.
-PROBE="/var/www/dev/uploads/__verify_$$.phtml"
-printf 'GIF89a;\n<?php echo "EXEC_OK_%s"; ?>' "$$" > "$PROBE"
+# GD must be present or the upload's image-decode check dies.
+php -m 2>/dev/null | grep -qi '^gd$' \
+    && ok "php-gd present (image upload check will run)" \
+    || bad "php-gd missing -- uploads will fail the decode step"
+
+# A genuine 1x1 GIF with a "<?=" payload appended: this is exactly the Stage 3
+# payload. Drop it in /uploads (as www-data would) and confirm it EXECUTES.
+#
+# IMPORTANT: the payload builds the marker by CONCATENATION -- '<?= "AB"."CD" ?>'
+# -- so the contiguous marker string exists ONLY in executed output, never in
+# the raw file source. Grepping for a marker that also appears literally in the
+# file would match a statically-served file too (a false positive), which is
+# exactly the trap to avoid here.
+GIF89A_1PX="\x47\x49\x46\x38\x39\x61\x01\x00\x01\x00\x80\x00\x00\x00\x00\x00\xff\xff\xff\x21\xf9\x04\x01\x00\x00\x00\x00\x2c\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02\x44\x01\x00\x3b"
+PROBE="/var/www/dev/uploads/__verify_$$.gif"
+printf "${GIF89A_1PX}\n<?= 'RCE' . 'PROOF' . $$; ?>" > "$PROBE"
 chown www-data:www-data "$PROBE"; chmod 0644 "$PROBE"
 resp=$(hget "$DEV" "/uploads/$(basename "$PROBE")")
-echo "$resp" | grep -q "EXEC_OK_$$" \
-    && ok ".phtml executes inside /uploads (Stage 3 landing zone live)" \
-    || bad ".phtml did NOT execute in /uploads -- check the vhost SetHandler"
-# And confirm it's a real GIF to libmagic, for the debrief detail.
-file "$PROBE" | grep -qi 'GIF image' \
-    && ok "payload is seen as a GIF by libmagic" \
-    || bad "payload not detected as GIF (magic prefix wrong?)"
-rm -f "$PROBE"
+echo "$resp" | grep -q "RCEPROOF$$" \
+    && ok "image (.gif + <?=) executes inside /uploads (Stage 3 landing zone live)" \
+    || bad "image did NOT execute in /uploads -- check the vhost handler + FPM security.limit_extensions"
+
+# SCOPE: the same file at the docroot ROOT must NOT execute -- image execution
+# is confined to the uploads directory. Same concatenation trick, so a
+# statically-served file cannot produce the contiguous marker.
+SCOPE="/var/www/dev/__verify_scope_$$.gif"
+printf "${GIF89A_1PX}\n<?= 'SCOPE' . 'LEAK' . $$; ?>" > "$SCOPE"
+chown www-data:www-data "$SCOPE"; chmod 0644 "$SCOPE"
+resp=$(hget "$DEV" "/$(basename "$SCOPE")")
+echo "$resp" | grep -q "SCOPELEAK$$" \
+    && bad "image executed OUTSIDE /uploads -- handler is not scoped!" \
+    || ok "images do not execute outside /uploads (handler correctly scoped)"
+rm -f "$PROBE" "$SCOPE"
+
+# The app's own pages must still run (global .php handler intact).
+hget "$DEV" /login.php | grep -q 'Sign in' \
+    && ok "app .php pages still execute (login renders)" \
+    || bad "app pages not executing -- global .php handler / FPM issue"
 
 echo "== Unintended-path spot checks =="
 

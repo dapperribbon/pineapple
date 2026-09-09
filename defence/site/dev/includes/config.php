@@ -27,16 +27,16 @@ const APP_RELEASE = '0.9.4-rc2';
 // --- Uploads ----------------------------------------------------------------
 const UPLOAD_DIR  = '/var/www/dev/uploads';
 const UPLOAD_URL  = '/uploads';
-const UPLOAD_MAX  = 2097152;   // 2 MiB, matched to the FPM pool's limits
+const UPLOAD_MAX  = 500000;   // 500 KB -- page scans are small
 
 /**
- * Accepted document types.
+ * Accepted document extensions.
  *
- * The rollout only ever needed scans and diagrams, so the DMS accepts images
- * and PDFs. PDFs are checked but currently rejected by the content sniff on
- * some scanner output, so operations were told to upload page images instead.
+ * The rollout only ever needed page scans and diagrams, so the DMS accepts
+ * raster image formats. Validation is by extension allowlist, plus a real
+ * image-decode check (GD) and a content scan -- see upload.php.
  */
-const UPLOAD_ALLOWED_MIME = ['image/gif', 'image/png', 'image/jpeg'];
+const UPLOAD_ALLOWED_EXT = ['jpg', 'jpeg', 'gif', 'png', 'bmp'];
 
 // --- Diagnostics tool -------------------------------------------------------
 const DIAG_PING_BIN       = '/usr/bin/ping';

@@ -79,57 +79,69 @@ the "cleanest" mental model; both are fine.)
 
 ---
 
-## Stage 3 — admin upload to RCE (magic bytes + extension)
+## Stage 3 — admin upload to RCE (real image + short-echo tag)
 
-The upload has **three** checks, all in `upload.php`, and the payload has to
-beat all three simultaneously:
+The upload has **five** checks, all in `upload.php`, and the payload has to beat
+all of them at once:
 
-| Layer | Code | Bypass |
-|---|---|---|
-| declared type | `in_array($_FILES['doc']['type'], [...])` | spoof `Content-Type: image/gif` |
-| **content sniff** | `finfo_file()` on the temp file | prefix bytes `GIF89a` |
-| extension | `pathinfo(...) === 'php'` (one entry) | name it `.phtml` |
+| # | Check | Code | Bypass |
+|---|---|---|---|
+| 1 | extension allowlist | `in_array($ext, ['jpg','jpeg','gif','png','bmp'])` | name it `.gif` |
+| 2 | size cap (500 KB) | `$file['size'] > UPLOAD_MAX` | keep it small |
+| 3 | no `.php` in the name | `stripos($name, '.php') !== false` | `shell.gif` has none |
+| 4 | must decode as an image | `imagecreatefrom*()` (GD) | start from a **real image** |
+| 5 | no `<?php` in contents | `strpos($data, '<?php')` | use the short-echo tag **`<?=`** |
 
-Final payload:
+Final payload — a genuine GIF with the tag appended after the image data:
 
 ```
-GIF89a;
-<?php system($_GET['cmd']); ?>
+<47 49 46 38 39 61 …real 1x1 GIF bytes… 3B>
+<?= system($_GET['c']); ?>
 ```
 
-uploaded as `shell.phtml`, `Content-Type: image/gif`. The vhost maps
-`.php .phtml .php5 .php7 .phar` to PHP-FPM **including under `/uploads`**, so
-fetching `/uploads/shell.phtml?cmd=id` executes it as `www-data`.
+uploaded as `shell.gif`. The stored file keeps its image extension, and the
+vhost maps image extensions to PHP-FPM **inside `/uploads/` only**, so fetching
+`/uploads/<name>.gif?c=id` executes it as `www-data`. (The stored name is
+server-randomised; students get the URL from the `/admin.php` listing link.)
 
 **Teaching points:**
 
-1. **libmagic reads signatures, not whole files.** A GIF is recognised from
-   `GIF87a`/`GIF89a` at offset 0 and nothing else. A content sniff is stronger
-   than a header check and *still* trivially defeated if it only reads the
-   magic. This is why real image validation re-encodes the image rather than
-   sniffing it.
-2. **Blacklists lose.** One-entry (`.php`) or hundred-entry, a blacklist of
-   dangerous extensions is a losing game against `.phtml`, `.phar`, case tricks,
-   and whatever the web server happens to map. The fix is an allowlist bound to
-   what the server will execute — and, better, storing uploads outside the web
-   root or on a host with no interpreter.
-3. **Distinct error messages are an oracle.** The two different rejection
-   strings let the attacker peel the layers one at a time. Verbose, layer-
-   specific validation errors are themselves a (minor) finding.
+1. **A decode check is not a sanitiser.** `imagecreatefromgif()` proves the file
+   *contains* a valid image — it does not remove anything, and here the decoded
+   image is thrown away and the original bytes are stored. Real defence
+   *re-encodes* the image and writes the re-encoded output, which drops trailing
+   payload data. (That's the one-line fix: save `imagegif($im, …)`, not the
+   upload.)
+2. **String blocklists miss siblings.** Blocking `<?php` does nothing about
+   `<?=` (always enabled, independent of `short_open_tag`); historically
+   `<script language="php">` was another. Allowlisting *what a template may
+   contain* is not how you keep code out of an upload — keeping the upload dir
+   non-executable is.
+3. **Extension allowlist + a permissive execution mapping still lose.** The
+   allowlist correctly forces an image extension — but the deployment then maps
+   image extensions to PHP in the upload dir. The allowlist was sound; the
+   server config defeated it. Uploads should live somewhere with no interpreter.
+4. **Distinct error messages are an oracle.** Each of the five layers has its own
+   rejection string, so an attacker peels them one at a time. Verbose,
+   layer-specific validation errors are themselves a (minor) finding.
 
-**Blue-team half:** on `/admin.php`, the uploaded row shows `image/gif` for both
-declared and detected type while the stored filename ends in `.phtml`. `file`
-on the server agrees it is a GIF. Point out that content-type logging did not
-catch this and *filename plus execution mapping* is what mattered. A good
-detection is "executable extension in an upload directory," not MIME.
+**Blue-team half:** on the server, `file /var/www/dev/uploads/<name>.gif` reports
+a real GIF image, and the stored row looks like an ordinary image upload — yet it
+executes. The lesson: MIME/type logging won't catch this; *"an upload directory
+is executing code"* is the detection. A rule that flags PHP tags (`<?`) inside
+files under an upload path, or simply an alert that the upload dir has a PHP
+handler at all, is what catches it.
 
 ### Optional difficulty bump
 
-Swap `finfo_file()` for `getimagesize()` in `upload.php`. `getimagesize()`
-parses the logical screen descriptor, so a bare 6-byte prefix is rejected and
-students must build a structurally valid GIF header (width/height/flags) around
-the payload, or append the PHP after a real image. Everything else in the chain
-is unchanged. Do this only if the class found the base version too quick.
+Two independent ways to make Stage 3 harder:
+- **Re-encode instead of decode-and-discard** (the real fix, used as a partial
+  mitigation): save `imagegif($im, $target)` so trailing bytes are dropped —
+  then students must embed the payload *inside* image data that survives a
+  re-encode (e.g. in a text chunk GD preserves), a much harder exercise.
+- **Tighten the content scan** to also reject `<?` (catching `<?=`). Then the
+  only route left is a metadata/EXIF field the interpreter still runs — steeply
+  harder. Do either only if the class found the base version too quick.
 
 ---
 
@@ -152,6 +164,9 @@ backup job) so the follow-up build starts from a known place.
 | Can't find dev vhost | didn't read the brochure | "What's in the footer? What does the JS try to load?" |
 | Cookie edit does nothing | forgot the length prefix | "How does PHP know how long the string is?" |
 | Cookie edit does nothing (2) | edited while logged in, doubts it | "Sign out, set the cookie, reload." |
-| Upload always rejected | only spoofed one of three checks | "Read the exact error. Which check is talking?" |
-| `.phtml` uploads but 404/downloads | fetching wrong path, or FPM not mapped | "The admin list links the real URL. If it still won't run, verify the vhost." |
+| Upload always rejected | only beat one of the five checks | "Read the exact error. Which check is talking?" |
+| "not a valid image" | uploaded a bare `<?= … ?>` file, no image data | "It has to decode as a real image — start from one." |
+| "contains server code" | used `<?php` | "What other PHP open tag is there?" (→ `<?=`) |
+| Uploads OK but never executes | fetching a legit image, or named `.php`-ish | "The admin list links the real stored URL. Payload must be in a real image, named `.gif`." |
+| Ping tool eating all their time | working as intended | let them; it's the lesson. Show them `diag_queue` afterwards. |
 | Ping tool eating all their time | working as intended | let them; it's the lesson. Show them `diag_queue` afterwards. |

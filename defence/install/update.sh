@@ -62,6 +62,21 @@ fi
 echo "    got it (kept out of the log)"
 
 # ---------------------------------------------------------------------------
+# 1b. Ensure the GD extension is present.
+#
+# The Stage 3 upload backend validates images with imagecreatefrom*(), which
+# lives in php-gd. It is the one package this in-place update needs, so we make
+# an exception to the "no apt" rule and install just it if it is missing.
+# ---------------------------------------------------------------------------
+if php -m 2>/dev/null | grep -qi '^gd$'; then
+    echo "==> GD extension already present"
+else
+    echo "==> Installing php${PHP_VER}-gd (required by the image upload check)"
+    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "php${PHP_VER}-gd" >/dev/null \
+        || echo "    warning: could not install php${PHP_VER}-gd -- uploads will fail until it is present" >&2
+fi
+
+# ---------------------------------------------------------------------------
 # 2. Apache: modules, vhosts, TLS cert wiring.
 # ---------------------------------------------------------------------------
 echo "==> Updating Apache modules and vhosts"

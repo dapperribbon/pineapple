@@ -40,11 +40,11 @@ retry to remove doubt. See the note in `includes/auth.php`.
 
 | # | Where | What it says | Leads to |
 |---|---|---|---|
-| 9  | Upload form help text | "Accepted: GIF, PNG, JPEG — max 2 MB" | tells them GIF is valid → `GIF89a` is the signature to try |
-| 10 | Rejection message A | "File content does not match an accepted image format." | reveals a real content sniff exists (beyond the header) → magic bytes |
-| 11 | Rejection message B | "PHP files are not permitted." | singular and extension-specific → try `.phtml` / `.php5` |
-| 12 | `/admin.php` document list | each file linked at `/uploads/<name>` | how they learn the exact URL (indexing is off) |
-| 13 | `/admin.php` declared-vs-detected columns | shows `image/gif` for both on a `.phtml` row | blue-team detection story for the debrief |
+| 9  | Upload form help text | "Accepted: JPG, JPEG, GIF, PNG, BMP" | image extensions only — the payload must ride inside a real image |
+| 10 | Rejection: "not a valid image" | fires on a bare-tag file | reveals a real decode (GD) check → must start from a genuine image |
+| 11 | Rejection: "appears to contain server code" | fires on `<?php` | a *string* scan → what other PHP tag is there? (`<?=`) |
+| 12 | Rejection: "filename is not permitted" | fires on any `.php` in the name | can't sneak an executable extension into the name |
+| 13 | `/admin.php` document list | prints the raw `/uploads/<random>.<ext>` path under each file (the "View" link itself goes via `view.php`) | how they learn the exact (randomised) executable URL — indexing is off |
 
 ---
 

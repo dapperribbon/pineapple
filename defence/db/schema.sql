@@ -54,7 +54,7 @@ CREATE TABLE documents (
     original_name VARCHAR(255) NOT NULL,
     stored_name   VARCHAR(255) NOT NULL,
     mime_reported VARCHAR(100) NOT NULL,      -- what the client claimed
-    mime_detected VARCHAR(100) NOT NULL,      -- what finfo actually saw
+    mime_detected VARCHAR(100) NOT NULL,      -- image type derived from the validated extension
     size_bytes    INT UNSIGNED NOT NULL,
     uploaded_at   DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id),

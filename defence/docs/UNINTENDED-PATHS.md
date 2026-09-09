@@ -14,9 +14,10 @@ The `install/verify.sh` script mechanically checks the items marked **[verify]**
   `/var/www/backup`. No shared parent inside the web tree.
 - `open_basedir = /var/www/dev/:/tmp/:/var/tmp/:<sessiondir>` on the dev pool,
   so PHP file functions in the dev app cannot read the other two roots.
-- Upload filename is run through `basename()` and rejected if it starts with a
-  dot or contains a NUL, so a traversal filename cannot escape `uploads/`.
-  **[verify]** (`www-data` cannot write app code)
+- The stored filename is **server-generated** (`bin2hex(random_bytes(8))` + the
+  validated image extension); the client-supplied name never reaches the path,
+  so there is no traversal or overwrite of app files. **[verify]** (`www-data`
+  cannot write app code)
 
 ## 2. PHP executing where it shouldn't
 
@@ -24,6 +25,15 @@ The `install/verify.sh` script mechanically checks the items marked **[verify]**
   **no** PHP handler at all, and additionally deny PHP-ish extensions with a
   `FilesMatch … Require all denied`. A `.php` dropped on the brochure is served
   as… nothing (403), never as source, never executed. **[verify]**
+- On the dev vhost, the global handler runs **only `.php`**. Image extensions
+  are handed to PHP-FPM by a handler scoped to `<Directory /var/www/dev/uploads>`
+  **only** — that is the Stage 3 misconfiguration, and it does not apply
+  anywhere else in the docroot. **[verify]** (an image dropped at the docroot
+  root does not execute)
+- `security.limit_extensions` in the FPM pool lists the image extensions so FPM
+  will run them; it is pool-global, but only the uploads-dir handler *routes*
+  images to FPM, so execution stays confined to that directory. Nothing else in
+  the app maps an image to FPM.
 - `AllowOverride None` everywhere, so an uploaded `.htaccess` is inert and
   cannot add a handler or re-enable indexing.
 
@@ -128,8 +138,24 @@ them:
 - Empty `disable_functions` (Stage 3 needs `system`/`exec`).
 - Loose `open_basedir` including `/tmp` (per brief; and a `system()` child
   escapes it anyway — that's a lesson, not a leak of the box).
-- FPM mapping applies inside `uploads/` (the Stage 3 misconfiguration itself).
+- Image extensions mapped to FPM **inside `uploads/`**, plus those extensions in
+  `security.limit_extensions` (the Stage 3 misconfiguration itself).
+- The upload decodes an image but stores the **original** bytes rather than a
+  re-encoded copy, so an appended payload survives (the Stage 3 flaw). "Fixing"
+  it means writing `imagegif($im, …)` output instead.
 - Self-service registration enabled (Stage 2a entry).
 - The persistent remember-me cookie surviving in the browser (Stage 2b).
 - No CSRF token on `upload.php` / `tools.php` (keeps them scriptable; in-world,
   added-late screens that missed the review).
+
+**Image viewing (`view.php`).** Because `uploads/` runs image extensions through
+PHP, fetching a clean image at its raw `/uploads/<name>` URL returns it as
+text/html garbage. So the admin "View" link points at `view.php`, which
+`readfile()`s the bytes and streams them with the correct `image/*`
+Content-Type — legitimate images render normally. `view.php` is **not** an
+alternate exploit path: it is `require_admin()`-gated (**[verify]**), it
+`basename()`s and regex-validates the name against the exact stored-name shape
+and confirms the path resolves inside `UPLOAD_DIR` (no traversal), and
+`readfile()` streams bytes without interpreting them. The raw
+`/uploads/<name>.<ext>` URL still executes — that remains the Stage 3 vector,
+and the admin listing prints that raw path beneath each entry as the breadcrumb.
