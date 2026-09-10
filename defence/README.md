@@ -68,6 +68,20 @@ Point DuckDNS (`siwang.duckdns.org`) at the box's public IP. The `.pineapple`
 vhosts resolve only via the client's hosts file — see
 [`install/hosts-entries.txt`](install/hosts-entries.txt).
 
+### Or build it as a container
+
+Same box, no VM:
+
+```bash
+cd docker && docker compose up -d --build
+docker compose exec siwang /opt/siwang/install/verify.sh
+```
+
+`install.sh` runs verbatim inside the image, so the vhosts, the FPM pool and
+both planted flaws are identical -- only the plumbing around them (systemd ->
+supervisord, ufw -> published ports, certbot -> a self-signed cert) differs.
+See [`docker/README.md`](docker/README.md).
+
 ### Reset between cohorts
 
 ```bash

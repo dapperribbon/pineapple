@@ -1,0 +1,70 @@
+# Siwang CTF privesc lab -- container stack.
+#
+#   cd defence/docker
+#   docker compose up -d --build
+#   docker compose exec siwang /opt/siwang/install/verify.sh
+#
+# THE BOX IN THIS STACK IS DELIBERATELY VULNERABLE. Stage 3 ends in remote code
+# execution as www-data by design. Run it on an isolated lab network only, and
+# never on a host you care about.
+#
+# Everything runs in one container on purpose -- see the header of Dockerfile.
+
+services:
+  siwang:
+    build:
+      # The context is defence/, so the Dockerfile can COPY apache/, site/,
+      # db/ and install/. defence/.dockerignore keeps docs/ and exploit/ out.
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: siwang-lab:1.0
+    container_name: siwang-lab
+    hostname: siwang
+    restart: unless-stopped
+
+    # Bound to loopback by default so an absent-minded `docker compose up` does
+    # not put a knowingly vulnerable box on the LAN. For a classroom, set the
+    # lab NIC's address (or 0.0.0.0) first:
+    #
+    #     SIWANG_BIND=0.0.0.0 docker compose up -d
+    #
+    # or put SIWANG_BIND=... in defence/docker/.env
+    ports:
+      - "${SIWANG_BIND:-127.0.0.1}:80:80"
+      - "${SIWANG_BIND:-127.0.0.1}:443:443"
+
+    # A fresh /run each start: no stale apache2.pid or dead FPM socket from the
+    # build layer. The entrypoint recreates the subdirectories.
+    tmpfs:
+      - /run:exec,mode=755
+
+    # Nothing here needs extra privileges. Docker's default capability set
+    # already includes NET_RAW (the ping rabbit hole) and SETFCAP
+    # (lockdown.sh's setcap call). Do NOT add privileged: true -- the later
+    # www-data -> root stages are supposed to be won inside the box, not
+    # handed over by the container runtime.
+
+    stop_grace_period: 25s
+
+    # --- Optional: persist the database across `docker compose down` ---------
+    # Off by default. Recreating the container is the intended way to reset the
+    # lab between cohorts, and a fresh volume triggers the entrypoint's
+    # re-provisioning path (new random DB password, re-seeded accounts).
+    # volumes:
+    #   - siwang-db:/var/lib/mysql
+
+    # --- Optional: real TLS instead of the built-in self-signed cert ---------
+    # volumes:
+    #   - /etc/letsencrypt/live/siwang.duckdns.org:/etc/letsencrypt/live/siwang.duckdns.org:ro
+    #   - /etc/letsencrypt/archive:/etc/letsencrypt/archive:ro
+
+    # --- Optional: edit the app without rebuilding ---------------------------
+    # Bind-mounting the docroot defeats lockdown.sh's ownership rules (the
+    # mount arrives with the host's uid/gid), so www-data may end up able to
+    # write app code -- an unintended path. Use it while developing, never for
+    # a box students touch, and re-run lockdown.sh after mounting.
+    # volumes:
+    #   - ../site/dev:/var/www/dev
+
+# volumes:
+#   siwang-db:

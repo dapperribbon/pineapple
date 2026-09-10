@@ -1,0 +1,105 @@
+#!/bin/bash
+#
+# Build-time stand-in for systemctl.
+#
+# install.sh, update.sh and lockdown.sh are written for a real Ubuntu box and
+# call `systemctl enable --now mariadb`, `systemctl restart php8.3-fpm` and
+# `systemctl restart apache2`. A container has no init system, so those calls
+# would fail and abort the build.
+#
+# Rather than fork install.sh into a Docker-specific copy and let the two
+# drift, this stub gives it just enough systemctl to run VERBATIM: it really
+# does start and stop the three services, using the same binaries systemd
+# would have used. That also means install.sh's own smoke test runs for real
+# during `docker build`.
+#
+# This is a BUILD-TIME shim only -- at container runtime supervisord owns the
+# processes. It deliberately understands nothing beyond start/stop/restart.
+
+set -u
+
+ACTION="${1:-}"
+shift || true
+
+WANT_NOW=0
+UNITS=()
+for arg in "$@"; do
+    case "$arg" in
+        --now) WANT_NOW=1 ;;
+        -*)    ;;                      # --quiet, --no-pager, ... : ignore
+        *)     UNITS+=("$arg") ;;
+    esac
+done
+
+# systemd's enable/disable only touch the process when --now is given.
+case "$ACTION" in
+    enable)  if [[ $WANT_NOW -eq 1 ]]; then ACTION=start; else exit 0; fi ;;
+    disable) if [[ $WANT_NOW -eq 1 ]]; then ACTION=stop;  else exit 0; fi ;;
+    daemon-reload|daemon-reexec|mask|unmask|preset|is-enabled|is-active|status)
+             exit 0 ;;
+esac
+
+# Poll a readiness command for up to 60s.
+_wait_for() {
+    local what="$1"; shift
+    local i
+    for i in $(seq 1 60); do
+        if "$@" >/dev/null 2>&1; then return 0; fi
+        sleep 1
+    done
+    echo "systemctl-stub: ${what} did not become ready in 60s" >&2
+    return 1
+}
+
+_start() {
+    case "$1" in
+        mariadb*|mysql*|mysqld*)
+            pgrep -x mariadbd >/dev/null 2>&1 && return 0
+            install -d -o mysql -g mysql -m 0755 /run/mysqld
+            if [[ ! -d /var/lib/mysql/mysql ]]; then
+                mariadb-install-db --user=mysql --skip-test-db >/dev/null
+            fi
+            mariadbd --user=mysql >>/var/log/siwang-build-mariadb.log 2>&1 &
+            _wait_for mariadb mysql -e 'SELECT 1'
+            ;;
+        php*fpm*)
+            install -d -m 0755 /run/php
+            pkill -f 'php-fpm8.3' >/dev/null 2>&1 || true
+            php-fpm8.3 --daemonize
+            ;;
+        apache2*|httpd*)
+            install -d -m 0755 /run/apache2
+            rm -f /run/apache2/apache2.pid
+            apache2ctl start
+            ;;
+        *)
+            echo "systemctl-stub: don't know how to start '$1' (ignored)" >&2
+            ;;
+    esac
+}
+
+_stop() {
+    case "$1" in
+        mariadb*|mysql*|mysqld*)
+            # A clean shutdown matters: this datadir is baked into the image.
+            pgrep -x mariadbd >/dev/null 2>&1 || return 0
+            mysqladmin shutdown >/dev/null 2>&1 || pkill -x mariadbd || true
+            while pgrep -x mariadbd >/dev/null 2>&1; do sleep 1; done
+            ;;
+        php*fpm*)  pkill -f 'php-fpm8.3' >/dev/null 2>&1 || true ;;
+        apache2*|httpd*) apache2ctl stop >/dev/null 2>&1 || true ;;
+    esac
+}
+
+rc=0
+for unit in "${UNITS[@]:-}"; do
+    [[ -z "$unit" ]] && continue
+    case "$ACTION" in
+        start)   _start "$unit" || rc=1 ;;
+        stop)    _stop  "$unit" || rc=1 ;;
+        restart|reload|try-restart|reload-or-restart)
+                 _stop "$unit"; _start "$unit" || rc=1 ;;
+        *)       ;;   # anything else is a no-op
+    esac
+done
+exit $rc

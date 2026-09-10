@@ -1,0 +1,14 @@
+# Build context for docker/Dockerfile is this directory (defence/).
+#
+# docs/ and exploit/ are deliberately EXCLUDED. Stage 3 ends in code execution
+# as www-data on this box; anything in the image is readable from a webshell.
+# Shipping WALKTHROUGH.md or exploit.py inside the target would hand a student
+# the whole answer. Run the exploit from the attacking machine instead.
+docs/
+exploit/
+
+# Never needed in the image.
+**/__pycache__/
+**/*.pyc
+.git/
+.gitignore
