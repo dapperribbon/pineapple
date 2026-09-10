@@ -1,0 +1,94 @@
+You are taking over on the Siwang CTF lab VM (Ubuntu 24.04). Read this fully
+before running anything.
+
+## Context
+
+This box currently runs the lab as a NATIVE install: Apache 2.4 + PHP-FPM 8.3 +
+MariaDB, provisioned by `defence/install/install.sh`, with three vhosts
+(siwang.duckdns.org, dev.siwang.pineapple, backup.siwang.pineapple), a ufw
+ruleset allowing 22/80/443, and a real Let's Encrypt certificate for
+siwang.duckdns.org.
+
+A containerised build of the same box was just added to the repo but has NEVER
+been built or run — it was written on a Windows machine with no Docker. Your job
+is to be the first real execution of it: decommission the native install,
+build the container, and fix whatever breaks.
+
+The lab is DELIBERATELY VULNERABLE (file-upload RCE as www-data is Stage 3, by
+design). Do not "fix" the planted flaws — specifically the upload filter in
+site/dev/upload.php, the unsigned remember-me cookie in
+site/dev/includes/auth.php, the <Directory /var/www/dev/uploads> image handler
+in apache/010-siwang-dev.conf, the empty disable_functions and the image
+extensions in security.limit_extensions in apache/php-fpm-siwang-dev.conf.
+Read defence/README.md and defence/docs/UNINTENDED-PATHS.md first.
+
+## Before you touch anything
+
+2. `git -C <repo> pull` to get commit 4795d72 ("v4") or later. The new files are
+   defence/docker/ (Dockerfile, docker-compose.yml, entrypoint.sh,
+   supervisord.conf, systemctl, README.md, .env.example),
+   defence/install/uninstall.sh, and defence/.dockerignore.
+3. Read defence/docker/README.md — it explains the design and the migration.
+4. Record the current state so you can compare afterwards: `systemctl is-active
+   apache2 php8.3-fpm mariadb`, `ss -ltnp`, `ufw status verbose`,
+   `ls /etc/letsencrypt/live/`, and the output of
+   `sudo defence/install/verify.sh` on the native install.
+
+## The job
+
+1. `./defence/install/uninstall.sh --purge --dry-run` (needs no root). Read the
+   output. Confirm it is only going to remove lab things.
+2. `sudo ./defence/install/uninstall.sh --purge`. Confirm :80 and :443 are free.
+3. Install Docker if absent: `curl -fsSL https://get.docker.com | sudo sh`.
+4. ASK ME what SIWANG_BIND should be before starting the container. Default is
+   127.0.0.1. This matters: Docker publishes ports via its own iptables rules in
+   the DOCKER chain, which is traversed BEFORE ufw, so ufw will NOT filter a
+   published port. The bind address is the real perimeter now, not the firewall.
+   Do not put a deliberately vulnerable box on a public interface on your own
+   judgment.
+5. `cd defence/docker && sudo docker compose up -d --build`.
+6. `sudo docker compose exec siwang /opt/siwang/install/verify.sh` — expect
+   PASS: 20  FAIL: 0.
+7. If the real Let's Encrypt cert should be served instead of the image's
+   self-signed one, uncomment the TLS bind mount in docker-compose.yml and sort
+   out renewal (the README has the certbot --standalone hook approach; the old
+   apache/webroot authenticators no longer work because /var/www/main is gone).
+
+## Specific things I could not verify — check these first if the build fails
+
+- The build runs `install.sh` VERBATIM using a fake `systemctl` at
+  docker/systemctl. If the build dies in that script, check the stub's
+  _start/_stop functions before changing install.sh — install.sh is shared with
+  the VM path and should stay untouched.
+- Whether mariadb-server's postinst leaves a usable datadir when policy-rc.d
+  blocks the service start. The stub and entrypoint both handle an empty
+  /var/lib/mysql via `mariadb-install-db --skip-test-db`, but that path is
+  untested.
+- Whether noble's MariaDB 10.11 still ships the `mysql` / `mysqladmin` compat
+  symlinks. db/setup.sh and the stub both depend on them.
+- Binary paths assumed by docker/supervisord.conf: /usr/sbin/mariadbd,
+  /usr/sbin/php-fpm8.3, /usr/sbin/apache2.
+- Whether the cap_net_raw xattr on /usr/bin/ping survives into an image layer.
+  The entrypoint re-asserts it; verify.sh checks it.
+- CRLF normalisation: the repo is developed on Windows and the Dockerfile
+  strips \r from copied text files. If a script dies with "bad interpreter" or
+  the brochure byte-size check fails, that step is the suspect.
+
+## Guardrails
+
+- Never `docker compose` with privileged: true. Stages 1-3 need nothing beyond
+  Docker's default capability set.
+- Do not delete /etc/letsencrypt or /var/lib/mysql.
+- Do not bind-mount the docroot into the container for a box students will
+  touch — the mount arrives with host uid/gid and defeats lockdown.sh's
+  ownership rules, which is an unintended path to writing app code.
+- If you change any lab config, re-run verify.sh and re-read
+  defence/docs/UNINTENDED-PATHS.md.
+
+## Report back
+
+- Full verify.sh output.
+- Any build or runtime errors verbatim, and the diff of any fix you applied.
+- Confirmation of what is listening on 80/443 and on which interface.
+- Whether the native install is fully gone (`systemctl is-enabled apache2
+  php8.3-fpm mariadb`, `ls /var/www`).
