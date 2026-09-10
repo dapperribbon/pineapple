@@ -13,9 +13,9 @@ included here — see [`docs/PRIVESC-TODO.md`](docs/PRIVESC-TODO.md).
 
 > **This box is intentionally insecure.** Deploy it only on an isolated lab
 > network. Never expose it to the internet or run it on a machine you care
-> about. The `duckdns.org` name is how students reach it; the `.pineapple`
+> about. The `duckdns.org` name is how  reach it; the `.pineapple`
 > vhosts are meant to be added to `/etc/hosts` by hand and must not be put in
-> public DNS.
+> public DNS.students
 
 ---
 
