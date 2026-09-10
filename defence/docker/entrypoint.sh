@@ -22,6 +22,9 @@ CONFIG=/var/www/dev/includes/config.php
 echo "==> Preparing runtime directories"
 install -d -m 0755 /run/php /run/apache2 /var/log/supervisor
 install -d -o mysql -g mysql -m 0755 /run/mysqld
+# /var/lock -> /run/lock, which the /run tmpfs wipes. apache2ctl mktemps its
+# lock dir there, so without this `apache2ctl configtest` fails at runtime.
+install -d -m 1777 /run/lock
 # Harmless when /run is a tmpfs; essential when it is not, because the build
 # left pid files and a dead socket behind and Apache refuses to start over them.
 rm -f /run/apache2/*.pid /run/php/*.sock /run/mysqld/*.pid /run/mysqld/*.sock
@@ -60,7 +63,7 @@ if [[ ! -d /var/lib/mysql/mysql ]]; then
 
     # Alphanumeric only, for the same reason db/setup.sh gives: the value ends
     # up inside a PHP single-quoted string and a sed replacement.
-    DB_PASS="${SIWANG_DB_PASS:-$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c 28)}"
+    DB_PASS="${SIWANG_DB_PASS:-$(head -c 1024 /dev/urandom | LC_ALL=C tr -dc 'A-Za-z0-9' | head -c 28)}"
     bash "${REPO}/db/setup.sh" "${DB_PASS}"
 
     echo "==> Re-syncing config.php with the new database password"

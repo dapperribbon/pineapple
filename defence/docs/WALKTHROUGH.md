@@ -149,13 +149,14 @@ Two independent ways to make Stage 3 harder:
 
 ## After Stage 3
 
-The student has a shell as `www-data`. `open_basedir` is scoped to
-`/var/www/dev` but does not apply to `system()`-spawned children, so a reverse
-shell escapes it cleanly. That is the end of initial access.
+The student has a shell as `www-data` inside the `siwang` container.
+`open_basedir` is scoped to `/var/www/dev` but does not apply to
+`system()`-spawned children, so a reverse shell escapes it cleanly. That is the
+end of initial access.
 
-`www-data → user → root` is deliberately not built yet. See
-`docs/PRIVESC-TODO.md` for the reserved hooks (the `backup` vhost, a nightly
-backup job) so the follow-up build starts from a known place.
+The chain continues — `www-data → cracked mail cred → host user → root on the
+host` — in **Stages 4–8 below** (built). The old `backup` vhost hook is retired;
+it stays inert set-dressing.
 
 ---
 
@@ -172,3 +173,61 @@ backup job) so the follow-up build starts from a known place.
 | Uploads OK but never executes | fetching a legit image, or named `.php`-ish | "The stored URL is in the page source (the thumbnail's img src). Payload must be in a real image, named `.gif`." |
 | Ping tool eating all their time | working as intended | let them; it's the lesson. Show them `diag_queue` afterwards. |
 | Ping tool eating all their time | working as intended | let them; it's the lesson. Show them `diag_queue` afterwards. |
+
+---
+
+## Stages 4–8 — www-data to root on the host (BUILT)
+
+Full annotated build/teardown is in `docs/PRIVESC-TODO.md`; student-facing
+commands are in `exploit/USAGE.md`. The teaching arc:
+
+**Stage 4 (loot).** `www-data` reads `config.php` (it must — the app needs the
+DB password, and `open_basedir` includes the docroot) and dumps `users`. Point
+to make: an RCE foothold turns "the app can read its own config" into "the
+attacker can read every stored hash." The `siwang_app` grant is least-privilege
+(`SELECT/INSERT/UPDATE`, no `FILE`) — enough to *read* the hashes, not to write
+a shell via `INTO OUTFILE`. Least-privilege limited the blast radius; it didn't
+stop the loot.
+
+**Stage 5 (crack).** Exactly one hash cracks — `chrysanta` → `dylan`. The others
+are long/random on purpose. Teaching point: the crack is trivial; the finding is
+**password reuse**, not bcrypt. Ask why a cracked *non-admin* web password is
+worth anything — it's the reuse on another service that matters.
+
+**Stage 6 (pivot + reuse).** The mail host is on an internal-only docker network
+with no published port, so students must reach it *through* the RCE'd box. Two
+lessons: (1) network segmentation as seen from a foothold — "internal only" is a
+speed-bump once you own something on the segment; (2) credential reuse — the web
+password opens the mailbox. Then it's a needle-in-haystack read: ~12 decoy
+emails, one reset notice. Watching students grep vs. read-every-message is a
+good observation moment.
+
+**Stage 7 (SSH to the host).** The reset email leaks chrysanta's *host* shell
+password. This is the deliberate "leave the container" step: the escape is a
+**credential found in the estate**, not a Docker breakout (see
+`UNINTENDED-PATHS.md` §10 for why an unintended runtime escape is closed off).
+
+**Stage 8 (SUID PATH hijack).** `find / -perm -4000` surfaces `opsbackup`;
+`strings` shows it runs `backup-check` by bare name after `setuid(0)`. Prepend a
+writable dir to `$PATH` → root. Teaching point: SUID + a relative command name +
+inherited `$PATH` is the whole bug; the fix is an absolute path and a sanitised
+environment (or dropping the SUID bit entirely).
+
+### Operational notes for the instructor
+
+- Provision the host stage yourself: `sudo install/privesc-host.sh --confirm`
+  (it refuses without the flag; `--dry-run` shows exactly what it changes; undo
+  with `--uninstall`). It creates a password SSH account and a SUID binary on the
+  **host** — isolated, disposable lab boxes only, and firewall `:22` to the class.
+- Credentials to keep in sync if you change them: `db/seed_users.php`
+  (`chrysanta`/`dylan`) and `docker/smtp/seed-mail.sh` + `install/privesc-host.sh`
+  (`BenMyG0AT`).
+- The mailbox re-seeds on every mail-container restart (fresh tmpfs), so a
+  `docker compose restart smtp` resets Stage 6 between cohorts.
+
+| Symptom | Cause | Nudge |
+|---|---|---|
+| Can't reach the mail host | it's internal-only | "Where can that hostname resolve from? You already have a foothold that can." |
+| Cracks nothing | ran the admin/other hashes | "Which account looks ordinary? Try that one." |
+| Read the reset email, stuck | logged into mail, not the host | "The email is about a *shell* account. What service is that?" |
+| SUID found, now what | didn't inspect it | "`strings` it. What does it run, and how does it find it?" |

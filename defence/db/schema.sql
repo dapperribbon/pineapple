@@ -20,19 +20,20 @@ USE siwang_dev;
 -- ----------------------------------------------------------------------------
 -- users
 --
--- `role` is an ENUM and is *never* written from request data. Registration
--- hardcodes 'user'; there is no code path anywhere in the app that promotes an
--- account. The Stage 2 escalation does not touch this table at all -- it forges
--- session state, so the attacker acts as an admin without ever becoming one in
--- the database. (Worth pointing out in the debrief: `SELECT * FROM users` after
--- a successful compromise shows nothing unusual.)
+-- `role` is an ENUM. Registration lets an account pick from a NON-privileged
+-- allowlist ('user' or 'auditor') as a Stage 2 breadcrumb; 'admin' is never
+-- selectable and no code path anywhere in the app promotes an account to it.
+-- The Stage 2 escalation does not touch this table at all -- it forges session
+-- state, so the attacker acts as an admin without ever becoming one in the
+-- database. (Worth pointing out in the debrief: `SELECT * FROM users` after a
+-- successful compromise shows nothing unusual -- no admin row was created.)
 -- ----------------------------------------------------------------------------
 CREATE TABLE users (
     id            INT UNSIGNED NOT NULL AUTO_INCREMENT,
     username      VARCHAR(32)  NOT NULL,
     email         VARCHAR(190) DEFAULT NULL,
     password_hash VARCHAR(255) NOT NULL,      -- bcrypt, via password_hash()
-    role          ENUM('user','admin') NOT NULL DEFAULT 'user',
+    role          ENUM('user','auditor','admin') NOT NULL DEFAULT 'user',
     created_at    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     last_login_at DATETIME     DEFAULT NULL,
     PRIMARY KEY (id),

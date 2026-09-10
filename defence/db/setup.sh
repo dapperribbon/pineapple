@@ -29,7 +29,7 @@ if [[ -z "$APP_PASS" ]]; then
     # Alphanumeric only: this value gets embedded in a PHP single-quoted string
     # and passed through a shell argument, and quoting bugs in a lab installer
     # are not worth the entropy.
-    APP_PASS="$(tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 28)"
+    APP_PASS="$(head -c 1024 /dev/urandom | LC_ALL=C tr -dc 'A-Za-z0-9' | head -c 28)"
 fi
 
 command -v mysql >/dev/null 2>&1 || { echo "error: mysql client not found." >&2; exit 1; }

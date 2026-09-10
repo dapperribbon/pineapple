@@ -23,6 +23,14 @@ bad()  { echo "  FAIL  $1"; FAIL=$((FAIL+1)); }
 hget()  { curl -s  -H "Host: $1" "${BASE}$2"; }
 hcode() { curl -s -o /dev/null -w '%{http_code}' -H "Host: $1" "${BASE}$2"; }
 
+# The brochure host 301-redirects plain HTTP to HTTPS by design (UNINTENDED-PATHS
+# section 9), so fetching it through hget returns the redirect stub rather than the
+# page. Follow the redirect, pinning both ports back to this box, and accept the
+# certificate -- the container ships a self-signed one.
+BRESOLVE=(--resolve "${BROCHURE_HOST}:80:127.0.0.1" --resolve "${BROCHURE_HOST}:443:127.0.0.1")
+bget()  { curl -sk -L "${BRESOLVE[@]}" "http://${BROCHURE_HOST}$1"; }
+bcode() { curl -sk -L -o /dev/null -w '%{http_code}' "${BRESOLVE[@]}" "http://${BROCHURE_HOST}$1"; }
+
 echo "== Stage 1: vhosts and fallback =="
 
 apache2ctl configtest >/dev/null 2>&1 && ok "apache configtest" || bad "apache configtest"
@@ -33,7 +41,7 @@ s2=$(hget nope2-longer-name.siwang.pineapple / | wc -c)
     && ok "unmatched Host -> stable-size brochure ($s1 bytes)" \
     || bad "brochure fallback not byte-stable ($s1 vs $s2)"
 
-hget "$BROCHURE_HOST" / | grep -q 'dev.siwang.pineapple' \
+bget / | grep -q 'dev.siwang.pineapple' \
     && ok "brochure leaks the dev hostname" \
     || bad "brochure breadcrumb missing"
 
@@ -43,8 +51,8 @@ hget "$DEV" /login.php | grep -q 'Sign in' \
 
 # PHP must NOT execute on the brochure vhost.
 echo '<?php echo 1234; ?>' > /var/www/main/__probe.php 2>/dev/null || true
-body=$(hget "$BROCHURE_HOST" /__probe.php)
-code=$(hcode "$BROCHURE_HOST" /__probe.php)
+body=$(bget /__probe.php)
+code=$(bcode /__probe.php)
 echo "$body" | grep -q '1234' && bad "PHP executed on brochure vhost!" || ok "brochure vhost does not execute PHP (HTTP $code)"
 rm -f /var/www/main/__probe.php
 

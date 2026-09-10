@@ -38,11 +38,19 @@ if ($dbUser === null || $dbPass === null) {
  *            have an owner.
  * - emma   : an ordinary colleague. Exists to make the user list look real.
  * - svc_dms: a dormant service account, disabled-looking. Pure set dressing.
+ * - chrysanta: an ordinary colleague AND the Stage 5 crack target. This is the
+ *              ONE account with a weak, wordlist-crackable password ('dylan',
+ *              an early rockyou entry). It is deliberately role 'user' -- a
+ *              crackable ADMIN would shortcut Stage 2, which we must never do.
+ *              Its value is entirely off-box: the same password is reused on
+ *              the mail server (Stage 6), which is the actual lesson
+ *              (credential reuse), not the crack itself.
  *
- * Passwords are long and random-looking on purpose. They are NOT part of any
- * intended path: there is no credential-guessing stage in this box, and a
- * weak admin password here would be an unintended shortcut straight past
- * Stage 2. Do not "helpfully" make them guessable.
+ * mika/emma/svc_dms passwords stay long and random on purpose. They are NOT
+ * part of any intended path: apart from chrysanta there is no credential-
+ * guessing stage, and a weak admin password here would be an unintended
+ * shortcut straight past Stage 2. Do not "helpfully" make them guessable, and
+ * do not add a second crackable account -- keep exactly one path.
  */
 $users = [
     [
@@ -65,6 +73,16 @@ $users = [
         'password' => 'B2v#Qd91_svcDMS!7wTn',
         'role'     => 'user',
         'created'  => '2024-09-16 13:05:00',
+    ],
+    [
+        // Stage 5 crack target. Weak on purpose ('dylan' -- early rockyou).
+        // Non-admin. The crack matters only because this password is reused
+        // on the mail server; see docs/PRIVESC-TODO.md.
+        'username' => 'chrysanta',
+        'email'    => 'chrysanta@siwang-trading.example',
+        'password' => 'dylan',
+        'role'     => 'user',
+        'created'  => '2024-10-02 09:12:00',
     ],
 ];
 

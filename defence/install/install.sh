@@ -121,7 +121,7 @@ find "${WWW_MAIN}" "${WWW_DEV}" "${WWW_BACKUP}" -name '.gitkeep' -delete
 # ---------------------------------------------------------------------------
 echo "==> Provisioning database"
 systemctl enable --now mariadb >/dev/null 2>&1 || systemctl start mariadb
-DB_PASS="$(tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 28)"
+DB_PASS="$(head -c 1024 /dev/urandom | LC_ALL=C tr -dc 'A-Za-z0-9' | head -c 28)"
 bash "${REPO}/db/setup.sh" "${DB_PASS}"
 
 # ---------------------------------------------------------------------------

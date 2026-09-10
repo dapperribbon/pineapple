@@ -171,6 +171,28 @@ if [[ $PACKAGES -eq 1 ]]; then
 fi
 
 # ---------------------------------------------------------------------------
+# 5b. Remove Stage 7-8 host material (the SSH user + SUID PATH-hijack that
+#     privesc-host.sh installs on the host, if it was ever run here).
+# ---------------------------------------------------------------------------
+if [[ $PURGE -eq 1 ]]; then
+    echo "==> Removing Stage 7-8 host material (if present)"
+    PRIVESC="$(dirname "$0")/privesc-host.sh"
+    if [[ -f "$PRIVESC" ]]; then
+        if [[ $DRYRUN -eq 1 ]]; then
+            echo "    [dry-run] bash ${PRIVESC} --uninstall"
+        else
+            bash "$PRIVESC" --uninstall || echo "    privesc-host.sh --uninstall reported a problem (continuing)"
+        fi
+    else
+        # Fall back to removing the known artifacts directly.
+        run rm -f /usr/local/bin/opsbackup /etc/ssh/sshd_config.d/60-siwang-lab.conf
+        if id chrysanta >/dev/null 2>&1; then
+            run userdel -r chrysanta
+        fi
+    fi
+fi
+
+# ---------------------------------------------------------------------------
 # 6. Verify the ports the container needs are actually free.
 # ---------------------------------------------------------------------------
 echo "==> Checking that :80 and :443 are free"

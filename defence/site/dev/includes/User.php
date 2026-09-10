@@ -31,10 +31,10 @@ class User
     /** @var string */
     public $username;
 
-    /** @var string 'user' or 'admin' */
+    /** @var string 'user', 'auditor' or 'admin' */
     public $role;
 
-    public function __construct(int $id = 0, string $username = '', string $role = 'user')
+    public function __construct(int $id = 0, string $username = '', string $role = 'user')  // caller validates against the role allowlist
     {
         $this->id       = $id;
         $this->username = $username;

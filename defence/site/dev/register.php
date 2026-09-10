@@ -4,10 +4,15 @@
  *
  * Left switched on from the UAT phase (checklist item MWS-402, never done).
  *
- * Note what this does NOT do: it never reads a role from the request. The
- * INSERT hardcodes 'user', so there is no mass-assignment shortcut here --
- * submitting role=admin, role[]=admin or is_admin=1 to this form achieves
- * exactly nothing. Escalation has to go through the session-forging flaw.
+ * Role IS read from the request here, but only through a fixed non-privileged
+ * allowlist ('user', 'auditor'). This is a deliberate breadcrumb for Stage 2:
+ * letting the student pick a role at sign-up puts the word "role" in front of
+ * them and makes it show up, length-prefixed, inside the serialized
+ * siwang_remember cookie -- the exact field they need to tamper. It is NOT a
+ * mass-assignment shortcut: anything outside the allowlist, 'admin' included,
+ * is coerced back to 'user' server-side, so role=admin / role[]=admin / is_admin=1
+ * against this form still achieves exactly nothing. Escalation to admin still
+ * has to go through the session-forging flaw -- "exactly one path" is intact.
  */
 
 declare(strict_types=1);
@@ -23,6 +28,17 @@ $errors   = [];
 $username = '';
 $email    = '';
 
+/*
+ * Roles a self-service account may choose. Keys are the values stored in the
+ * users.role ENUM; the labels are display only. 'admin' is deliberately absent
+ * -- see the file header. Keep this in sync with the ENUM in db/schema.sql.
+ */
+$selectableRoles = [
+    'user'    => 'Standard user — register and search documents',
+    'auditor' => 'Auditor — read-only reviewer',
+];
+$role = 'user';
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_check();
 
@@ -30,6 +46,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $email    = trim(req_str($_POST, 'email'));
     $password = req_str($_POST, 'password');
     $confirm  = req_str($_POST, 'confirm');
+    $role     = req_str($_POST, 'role', 'user');
+
+    // Coerce anything outside the non-privileged allowlist back to 'user'.
+    // This is the gate that keeps the dropdown a breadcrumb and not a promotion
+    // channel: submitting role=admin lands a plain 'user' account, silently.
+    if (!isset($selectableRoles[$role])) {
+        $role = 'user';
+    }
 
     if (!preg_match('/\A[A-Za-z0-9_]{3,32}\z/', $username)) {
         $errors[] = 'Username must be 3–32 characters, letters, digits and underscores only.';
@@ -54,15 +78,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($stmt->fetch() !== false) {
             $errors[] = 'That username is already taken.';
         } else {
-            // role is hardcoded. It is not, and must not become, request data.
+            // role is bound, but only ever one of the allowlisted, non-admin
+            // values validated above -- never raw request data.
             $insert = db()->prepare(
                 "INSERT INTO users (username, email, password_hash, role)
-                 VALUES (:username, :email, :hash, 'user')"
+                 VALUES (:username, :email, :hash, :role)"
             );
             $insert->execute([
                 ':username' => $username,
                 ':email'    => ($email === '' ? null : $email),
                 ':hash'     => password_hash($password, PASSWORD_BCRYPT),
+                ':role'     => $role,
             ]);
 
             header('Location: /login.php?registered=1');
@@ -103,6 +129,16 @@ page_header('Create an account');
     <div class="field">
       <label for="email">Email <span class="muted">(optional)</span></label>
       <input id="email" name="email" type="email" autocomplete="email" value="<?= e($email) ?>">
+    </div>
+
+    <div class="field">
+      <label for="role">Account type</label>
+      <select id="role" name="role">
+        <?php foreach ($selectableRoles as $value => $label): ?>
+          <option value="<?= e($value) ?>"<?= $role === $value ? ' selected' : '' ?>><?= e($label) ?></option>
+        <?php endforeach; ?>
+      </select>
+      <p class="hint">Sets your directory role. Administrator accounts are provisioned by IT, not here.</p>
     </div>
 
     <div class="field">
